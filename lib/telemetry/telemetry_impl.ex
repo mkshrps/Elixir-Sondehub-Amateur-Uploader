@@ -1,0 +1,217 @@
+defmodule Sondehub.Telemetry.Impl do
+  alias ParseTimedate
+  alias Sondehub.Listener
+  @moduledoc """
+  Documentation for `Sondehub`.
+  """
+
+
+  @doc """
+    Sondehub amatuer data  format
+  [
+    {
+      "dev" ,
+      "software_name" ,
+      "software_version" ,
+      "uploader_callsign" ,
+      "time_received" "2023-02-13T154208.509Z",
+      "payload_callsign" ,
+      "datetime" "2023-02-13T154208.509Z",
+      "lat" 0,
+      "lon" 0,
+      "alt" 0,
+      "frequency" 0,
+      "temp" 0,
+      "humidity" 0,
+      "vel_h" 0,
+      "vel_v" 0,
+      "pressure" 0,
+      "heading" 0,
+      "batt" 0,
+      "sats" 0,
+      "snr" 0,
+      "rssi" 0,
+      "uploader_position" [
+        0,
+        0,
+        0
+      ],
+      "uploader_antenna"
+    }
+  ]
+
+
+  @hab_keys_ext
+  [
+      :dev ,
+      :software_name ,
+      :software_version ,
+      :uploader_callsign ,
+      :time_received ,
+      :payload_callsign ,
+      :datetime,
+      :lat ,
+      :lon ,
+      :alt ,
+      :frequency ,
+      :temp ,
+      :humidity ,
+      :vel_h ,
+      :vel_v ,
+      :pressure ,
+      :heading ,
+      :batt ,
+      :sats ,
+      :snr ,
+      :rssi ,
+      :uploader_position,
+      :uploader_antenna
+  ]
+"""
+  @hab_keys  [
+      #:dev ,
+      :payload_callsign ,
+      :frame,
+      :datetime,
+      :lat ,
+      :lon ,
+      :alt
+  ]
+
+  @telemetry_url  "https://api.v2.sondehub.org/amateur/telemetry"
+  @uploader_callsign "cransleigh_gateway"
+  def uploader_callsign do @uploader_callsign end
+  def hab_keys do @hab_keys end
+
+  def lora_msg() do
+    ["$$FLOPPY450,0232,16:30:00,53.223841,-2.517784,44"]
+  end
+
+  # ---------------- Upload Functions ------------------
+  # payload_data ::
+  # %{:raw_payload => , :snr => , :rssi => , :listener_info => }
+
+  def upload_telemetry(payload_data) do
+    parse_msg(payload_data)
+    |> convert_to_json()
+    |> send_telemetry_to_sondehub()
+   # return the response HTTPoison.response struct
+  end
+
+  def send_telemetry_to_sondehub(json_upload) do
+    url = @telemetry_url
+    header = [{"content-type", "application/json"}]
+    HTTPoison.put(url,json_upload,header)
+  end
+
+  def convert_to_json(body) do
+    # then to json
+    {:ok,json_content} = JSON.encode(body)
+    # wrap in [] for telemetry
+    "[#{json_content}]"
+  end
+
+
+  # message processing funcs
+  # parse the received (lora) message ind extra fields
+  # into a keyword list for the uploader
+  def parse_msg(%{:received_payload => payload,:snr => snr,:rssi => rssi, :frq => frq, :listener_info => listener_info, :custom => custom} = message_data) do
+    payload
+    |> lora_msg_to_list()
+    |> add_keywords_to_list(hab_keys())
+    |> add_custom_fields(custom)
+    |> add_device_details(snr,rssi,frq,listener_info)
+    |> ParseTimedate.set_current_date_time(:time_received)
+    |> ParseTimedate.add_date_to_time(:datetime)
+    |> parse_to_int(:frame)
+    |> parse_to_float(:lon)
+    |> parse_to_float(:lat)
+    |> parse_to_int(:alt)
+
+  end
+
+
+ # convert message to string for processing handle it as iodat or string
+  # return a string
+  def lora_msg_to_string(msg) when is_binary(msg) do
+   msg
+  end
+
+  def lora_msg_to_string(io_str) do
+    IO.iodata_to_binary(io_str)
+  end
+
+  def lora_msg_id(lora_msg) do
+    {id,_rest} = String.split(lora_msg,",")
+    |> List.pop_at(1)
+    String.to_integer(id)
+
+  end
+  # convert incoming telem message to lis and adds additional prams
+  def lora_msg_to_list(io_str) do
+      io_str
+     |> lora_msg_to_string()
+     |> String.trim("$$")
+     |> String.split(",")
+  end
+
+  def add_device_details(lora_list,snr,rssi,frq,[]) do
+    lst = [snr: snr, rssi: rssi, frequency: frq]
+    lora_list ++ lst
+  end
+
+  # extra details to be addd to head of list (reverse order)
+  def add_device_details(lora_list,snr,rssi,frq,listener_info) do
+    lst = [snr: snr, rssi: rssi, frequency: frq]
+    lora_list ++ lst ++ listener_info
+  end
+
+  #def hab_keys_ext do @hab_keys_ext end
+  def add_keywords_to_list(hab_msg_list,hab_keys) do
+    #create a keyword list
+    Enum.zip(hab_keys,hab_msg_list)
+  end
+
+  def is_telem?(str_msg) do
+    test = fn "$$" -> true
+      _ -> false
+    end
+    test.(String.slice(str_msg,0..1))
+  end
+
+  def add_custom_fields(list,_custom) do
+    list
+  end
+
+  defp parse_to_int(list,key) do
+    {_,list } = Keyword.get_and_update(list,key, fn c -> {c, String.to_integer(c)} end)
+    list
+    end
+
+  defp parse_to_float(list,key) do
+     {_,list } = Keyword.get_and_update(list,key, fn c -> {c, String.to_float(c)} end)
+     list
+  end
+
+    # NOT USED -----------------------------------------
+  # loop through a keyword list convert numeric strings to numbers
+  defp parse_number(string_value) do
+    result = Float.parse(string_value)
+    if result == :error do
+      string_value
+    else
+      {number,str} = result
+      if str == "" do
+        number
+      else
+        string_value
+      end
+    end
+  end
+
+  defp parse_list(list) do
+    Enum.map(list, fn v -> parse_number(v) end)
+  end
+
+
+end
