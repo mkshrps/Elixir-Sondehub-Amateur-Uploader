@@ -1,6 +1,7 @@
 # Sondehub
 
-**TODO: Add description**
+**Basic description work in progress **
+
 Elixir Amateur sondehub GenServer process for uploading telemetry data to sondehub amateur
 Currently supports basic telemetry uploads for Balloon ad Listener data. 
 Telemetry payload is expected as UKHAS format string
