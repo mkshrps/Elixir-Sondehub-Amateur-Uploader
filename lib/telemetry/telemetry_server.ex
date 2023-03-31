@@ -4,7 +4,7 @@ defmodule Sondehub.Telemetry.Server do
 
 
   # server callbacks
-  def init(%{}) do
+  def init([]) do
     #new_state = Map.put_new(state,:last_response,nil)
     new_state = %{
       :last_response => %{:status_code => 0, :status_msg => ""},

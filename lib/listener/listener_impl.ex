@@ -26,7 +26,7 @@ defmodule Sondehub.Listener.Impl do
   software_name: "Elixir Gateway" ,
   software_version: "1.0.1",
   uploader_callsign: "weirdie_gateway",
-  uploader_position: [53.230841,-2.527784,14],
+  uploader_position: [54.230841,-3.527784,14],
   uploader_antenna: "Diamond 500",
   uploader_contact_email: "",
   mobile: true,

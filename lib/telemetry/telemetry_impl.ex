@@ -68,6 +68,8 @@ defmodule Sondehub.Telemetry.Impl do
       :uploader_antenna
   ]
 """
+  @standard_fields 6
+
   @hab_keys  [
       #:dev ,
       :payload_callsign ,
@@ -83,8 +85,13 @@ defmodule Sondehub.Telemetry.Impl do
   def uploader_callsign do @uploader_callsign end
   def hab_keys do @hab_keys end
 
-  def lora_msg() do
+  def lora_msg1() do
     ["$$FLOPPY450,0232,16:30:00,53.223841,-2.517784,44"]
+  end
+  def lora_msg() do
+    # callsign,id,time,lat,lng,alt,
+    "$$FLOPPY445,10716,13:57:10,53.226910,-2.506636,43,0,0,12,16,0.00, 0.00,0.00,3449,0,3,0*2B5F"
+
   end
 
   # ---------------- Upload Functions ------------------
@@ -92,7 +99,9 @@ defmodule Sondehub.Telemetry.Impl do
   # %{:raw_payload => , :snr => , :rssi => , :listener_info => }
 
   def upload_telemetry(payload_data) do
-    parse_msg(payload_data)
+
+    Map.put(payload_data,:listener_info,Listener.Impl.listener_info())
+    |> parse_msg()
     |> convert_to_json()
     |> send_telemetry_to_sondehub()
    # return the response HTTPoison.response struct
@@ -115,11 +124,12 @@ defmodule Sondehub.Telemetry.Impl do
   # message processing funcs
   # parse the received (lora) message ind extra fields
   # into a keyword list for the uploader
-  def parse_msg(%{:received_payload => payload,:snr => snr,:rssi => rssi, :frq => frq, :listener_info => listener_info, :custom => custom} = message_data) do
+  def parse_msg(%{:payload => payload,:snr => snr,:rssi => rssi, :frq => frq, :listener_info => listener_info } = _message_data) do
     payload
     |> lora_msg_to_list()
+    |> get_standard_fields()  # just take standard fields out of payloadc for now
     |> add_keywords_to_list(hab_keys())
-    |> add_custom_fields(custom)
+    |> add_custom_fields([])
     |> add_device_details(snr,rssi,frq,listener_info)
     |> ParseTimedate.set_current_date_time(:time_received)
     |> ParseTimedate.add_date_to_time(:datetime)
@@ -129,8 +139,11 @@ defmodule Sondehub.Telemetry.Impl do
     |> parse_to_int(:alt)
 
   end
-
-
+  # no custom fields to process so just get the standard fields
+  def get_standard_fields(fields_list) do
+    Enum.take(fields_list,@standard_fields)
+  end
+  # todo process custom fields from lora payload
  # convert message to string for processing handle it as iodat or string
   # return a string
   def lora_msg_to_string(msg) when is_binary(msg) do

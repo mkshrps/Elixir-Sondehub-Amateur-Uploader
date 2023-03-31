@@ -1,8 +1,9 @@
 defmodule Sondehub.Telemetry do
 
+  use GenServer
 
-  def start_link() do
-    GenServer.start_link(Sondehub.Telemetry.Server,%{},[name: Telemetry])
+  def start_link(config \\ []) do
+    GenServer.start_link(Sondehub.Telemetry.Server,config,[name: Telemetry])
   end
 
   def upload_telem_payload(payload) do

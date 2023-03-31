@@ -1,5 +1,7 @@
 defmodule Sondehub.Listener.Server do
   use GenServer
+  require Logger
+  @listener_update_interval 10_000
 
   # start the genserver to fire up every n seconds
   def init(listener) do
@@ -7,27 +9,33 @@ defmodule Sondehub.Listener.Server do
     new_state =
       %{:last_response => %{:status_code => 0, :status_msg => ""},
         :listener_data => listener}
-
+    XGPS.Ports.start_port("ttyAMA0")
     :timer.send_after(5_000,:update_listener)
     {:ok,new_state}
     # set timer
 
   end
+
   def handle_info(:update_listener,state) do
+    Logger.info("updating Listener")
+    {:ok,gps_map} = XGPS.Ports.get_one_position()
+    IO.inspect(gps_map)
+    state = get_new_pos(gps_map,state)
     response = Sondehub.Listener.Impl.upload_listener(state.listener_data)
     # update with response from attempted upload
     new_state = handle_response(response,state)
 
-    :timer.send_after(10_000,:update_listener)
-    {:noreply, new_state}
+    :timer.send_after(@listener_update_interval,:update_listener)
+    {:noreply,new_state}
   end
 
-  #  position = [lat,lon,alt]
-  def handle_call({:set_position, position},_from,state)  do
+
+     #  position = [lat,lon,alt]
+  def handle_cast({:set_position, position},state)  do
     # position must be a complete keywordlist
     new_state = Keyword.replace(state.listener_data, :uploader_position, position)
     |> update_listener_state(state)
-    {:reply,:ok,new_state}
+    {:noreply,new_state}
   end
 
   def handle_call({:set_callsign, callsign},_from,state)  do
@@ -42,6 +50,10 @@ defmodule Sondehub.Listener.Server do
     new_state = Keyword.replace(state.listener_data, :mobile, mobile)
     |> update_listener_state(state)
     {:reply,:ok,new_state}
+  end
+
+  def test_event(event) do
+    IO.inspect(event.altitude)
   end
 
   # put the listener list back into state map
@@ -65,6 +77,19 @@ defmodule Sondehub.Listener.Server do
     new_state = put_in(state.last_response.status_code, 0)
     new_state = put_in(new_state.last_response.status_msg, "unknown")
     new_state
+  end
+
+  def get_new_pos(gps_map,state) when gps_map.has_fix == true do
+    Logger.info("save new position")
+    {altitude,_} = gps_map.altitude
+    position = [gps_map.latitude, gps_map.longitude,altitude]
+    Keyword.replace(state.listener_data, :uploader_position, position)
+    |> update_listener_state(state)
+  end
+  # do nothing
+  def get_new_pos(_gps_map,state) do
+    Logger.info("no new position available")
+    state
   end
 
 
