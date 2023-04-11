@@ -16,10 +16,11 @@ defmodule Sondehub.Listener.Server do
 
   end
 
+  # timed update of listener position
   def handle_info(:update_listener,state) do
     Logger.info("updating Listener")
     {:ok,gps_map} = XGPS.Ports.get_one_position()
-    IO.inspect(gps_map)
+    Logger.info("gps map - #{gps_map}")
     state = get_new_pos(gps_map,state)
     response = Sondehub.Listener.Impl.upload_listener(state.listener_data)
     # update with response from attempted upload
@@ -31,10 +32,16 @@ defmodule Sondehub.Listener.Server do
 
 
      #  position = [lat,lon,alt]
-  def handle_cast({:set_position, position},state)  do
+  def handle_cast({:set_position_from_list, position},state)  do
     # position must be a complete keywordlist
-    new_state = Keyword.replace(state.listener_data, :uploader_position, position)
-    |> update_listener_state(state)
+    new_state = if position_valid?(position) do
+
+      Keyword.replace(state.listener_data, :uploader_position, position)
+      |> update_listener_state(state)
+      |> set_new_position()
+    else
+      state
+    end
     {:noreply,new_state}
   end
 
@@ -50,6 +57,10 @@ defmodule Sondehub.Listener.Server do
     new_state = Keyword.replace(state.listener_data, :mobile, mobile)
     |> update_listener_state(state)
     {:reply,:ok,new_state}
+  end
+
+  def handle_call(:get_position,_from,state) do
+    {:reply,state.listener.uploader_position,state}
   end
 
   def test_event(event) do
@@ -92,5 +103,16 @@ defmodule Sondehub.Listener.Server do
     state
   end
 
+  def position_valid?([lat, lon, _alt] = _position) do
+    if (lon >= 0.0 && lat >=0.0) do
+      true
+    else false
+    end
+  end
 
+  # returns updated state
+  def set_new_position(state) do
+    Sondehub.Listener.Impl.upload_listener(state.listener_data)
+    |> handle_response(state) # updat state with response
+  end
 end

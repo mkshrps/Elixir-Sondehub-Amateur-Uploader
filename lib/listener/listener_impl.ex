@@ -6,6 +6,7 @@ defmodule Sondehub.Listener.Impl do
 
 
   @doc """
+    posn = [lat,lon,alt]
     Sondehub amatuer listener data  format
   {
     "software_name": ,
@@ -33,6 +34,8 @@ defmodule Sondehub.Listener.Impl do
   ]
 
   def listener_info do @listener_data end
+
+
 
   def position(listener) do
     Keyword.get(listener,:uploader_position)
