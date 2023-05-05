@@ -1,4 +1,5 @@
 defmodule Sondehub.Listener.Impl do
+  require Logger
 
    @moduledoc """
   Documentation for `Sondehub`.
@@ -24,13 +25,13 @@ defmodule Sondehub.Listener.Impl do
   """
   @listener_url "https://api.v2.sondehub.org/amateur/listeners"
   @listener_data [
-  software_name: "Elixir Gateway" ,
+  software_name: "Elixir Sondehub Gateway" ,
   software_version: "1.0.1",
-  uploader_callsign: "weirdie_gateway",
+  uploader_callsign: "WB_gateway",
   uploader_position: [54.230841,-3.527784,14],
   uploader_antenna: "Diamond 500",
   uploader_contact_email: "",
-  mobile: true,
+  mobile: false,
   ]
 
   def listener_info do @listener_data end
@@ -54,7 +55,7 @@ defmodule Sondehub.Listener.Impl do
   end
 
     def values() do
-      [0,0,0,[0,0,0],0,0,true]
+      [0,0,0,[0,0,0],0,0,false]
     end
 
   def add_keywords_to_list(msg_list,keys) do
@@ -64,6 +65,7 @@ defmodule Sondehub.Listener.Impl do
 
   # listener is keyword list with listener data
   def upload_listener(listener) do
+    Logger.info("Listener uploading now")
     listener
     |> convert_to_json()
     |> send_listener_to_sondehub()

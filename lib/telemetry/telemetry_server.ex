@@ -1,7 +1,7 @@
 defmodule Sondehub.Telemetry.Server do
   use GenServer
   alias Sondehub.Telemetry.Impl
-
+  require Logger
 
   # server callbacks
   def init([]) do
@@ -16,6 +16,7 @@ defmodule Sondehub.Telemetry.Server do
   def handle_cast({:upload_telem,telemetry_data},state) do
 
     {:ok,response} = Impl.upload_telemetry(telemetry_data)
+    Logger.info(inspect(response))
     # update with response from attempted upload
     new_state = put_in(state.telemetry_data,telemetry_data)
     new_state = put_in(new_state.last_response.status_code, response.status_code)
@@ -30,6 +31,7 @@ defmodule Sondehub.Telemetry.Server do
   def handle_call(:get_state,_from,state) do
     {:reply,state, state}
   end
+
 
 
 end

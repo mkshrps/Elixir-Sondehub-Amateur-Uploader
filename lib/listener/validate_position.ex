@@ -1,4 +1,4 @@
-defmodule Listener.ValidatePosition do
+defmodule Sondehub.Listener.ValidatePosition do
 
   def parse_position([lat,lon,alt]) do
     [lat,lon,alt]
@@ -15,7 +15,7 @@ defmodule Listener.ValidatePosition do
     |> String.replace(" ","",[global: true])
     |> String.split(",")
     |> Enum.map(fn pos -> [k,v] = String.split(pos,"=");{String.to_atom(k),v}  end)
-    lng = Keyword.get(values,:lng)
+    lon = Keyword.get(values,:lng)
     lat = Keyword.get(values,:lat)
     alt = Keyword.get(values,:alt)
     [lat, lon, alt]

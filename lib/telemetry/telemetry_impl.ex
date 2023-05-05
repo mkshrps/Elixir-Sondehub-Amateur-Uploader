@@ -1,6 +1,8 @@
 defmodule Sondehub.Telemetry.Impl do
   alias ParseTimedate
   alias Sondehub.Listener
+  require Logger
+
   @moduledoc """
   Documentation for `Sondehub`.
   """
@@ -88,6 +90,7 @@ defmodule Sondehub.Telemetry.Impl do
   def lora_msg1() do
     ["$$FLOPPY450,0232,16:30:00,53.223841,-2.517784,44"]
   end
+
   def lora_msg() do
     # callsign,id,time,lat,lng,alt,
     "$$FLOPPY445,10716,13:57:10,53.226910,-2.506636,43,0,0,12,16,0.00, 0.00,0.00,3449,0,3,0*2B5F"
@@ -99,7 +102,6 @@ defmodule Sondehub.Telemetry.Impl do
   # %{:raw_payload => , :snr => , :rssi => , :listener_info => }
 
   def upload_telemetry(payload_data) do
-
     Map.put(payload_data,:listener_info,Listener.Impl.listener_info())
     |> parse_msg()
     |> convert_to_json()
@@ -110,6 +112,7 @@ defmodule Sondehub.Telemetry.Impl do
   def send_telemetry_to_sondehub(json_upload) do
     url = @telemetry_url
     header = [{"content-type", "application/json"}]
+    Logger.info(json_upload)
     HTTPoison.put(url,json_upload,header)
   end
 
@@ -129,30 +132,30 @@ defmodule Sondehub.Telemetry.Impl do
     |> lora_msg_to_list()
     |> get_standard_fields()  # just take standard fields out of payloadc for now
     |> add_keywords_to_list(hab_keys())
-    |> add_custom_fields([])
-    |> add_device_details(snr,rssi,frq,listener_info)
+    |> add_custom_fields(IO.iodata_to_binary(payload))
+    |> add_device_details(snr,rssi,frq/1.0E6,listener_info)
     |> ParseTimedate.set_current_date_time(:time_received)
     |> ParseTimedate.add_date_to_time(:datetime)
     |> parse_to_int(:frame)
     |> parse_to_float(:lon)
     |> parse_to_float(:lat)
     |> parse_to_int(:alt)
-
   end
+
   # no custom fields to process so just get the standard fields
   def get_standard_fields(fields_list) do
     Enum.take(fields_list,@standard_fields)
   end
   # todo process custom fields from lora payload
- # convert message to string for processing handle it as iodat or string
+  # convert message to string for processing handle it as iodat or string
   # return a string
   def lora_msg_to_string(msg) when is_binary(msg) do
    msg
   end
 
-  def lora_msg_to_string(io_str) do
-    IO.iodata_to_binary(io_str)
-  end
+#  def lora_msg_to_string(io_str) do
+#    IO.iodata_to_binary(io_str)
+#  end
 
   def lora_msg_id(lora_msg) do
     {id,_rest} = String.split(lora_msg,",")
@@ -160,10 +163,10 @@ defmodule Sondehub.Telemetry.Impl do
     String.to_integer(id)
 
   end
-  # convert incoming telem message to lis and adds additional prams
-  def lora_msg_to_list(io_str) do
-      io_str
-     |> lora_msg_to_string()
+  # convert incoming telem message to string and then create a list on comma delimiter
+  def lora_msg_to_list(io_list) do
+      io_list
+     |> IO.iodata_to_binary()
      |> String.trim("$$")
      |> String.split(",")
   end
@@ -192,8 +195,8 @@ defmodule Sondehub.Telemetry.Impl do
     test.(String.slice(str_msg,0..1))
   end
 
-  def add_custom_fields(list,_custom) do
-    list
+  def add_custom_fields(current_fields_list,lora_message) do
+    current_fields_list ++ TrackerOptions.process_extra_fields(lora_message)
   end
 
   defp parse_to_int(list,key) do
@@ -202,7 +205,9 @@ defmodule Sondehub.Telemetry.Impl do
     end
 
   defp parse_to_float(list,key) do
-     {_,list } = Keyword.get_and_update(list,key, fn c -> {c, String.to_float(c)} end)
+    # {_,list } = Keyword.get_and_update(list,key, fn c -> {c, Float.parse(c)} end)
+    {_,list } = Keyword.get_and_update(list,key, fn c -> {v,_} = Float.parse(c); {c,v} end)
+
      list
   end
 
